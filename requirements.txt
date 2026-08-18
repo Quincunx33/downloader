@@ -1,0 +1,4 @@
+flask>=3.0
+flask-socketio>=5.3
+yt-dlp
+requests>=2.31
