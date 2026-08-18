@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+                      
 """
 🚀 iOS a-Shell Dual Mode Downloader
 Mode 1: Terminal UI (for a-Shell)
@@ -21,42 +21,40 @@ import yt_dlp
 import re
 from urllib.parse import urlparse, unquote
 
-# ---------------------------------------------------------
-# CONFIGURATION (FIXED FOR iOS a-Shell)
-# ---------------------------------------------------------
+                                                           
 class Config:
     def __init__(self):
-        # iOS a-Shell এর জন্য Documents ডিরেক্টরি ব্যবহার করুন
-        # a-Shell এ current working directory সাধারণত Documents ডিরেক্টরি
+                                                              
+                                                                         
         self.home = Path.cwd()
         
-        # Web server host: 0.0.0.0 = সকল ডিভাইস থেকে access, localhost = শুধু নিজের device
+                                                                                          
         self.web_host = "0.0.0.0"
         
-        # ডাউনলোড ডিরেক্টরি হিসেবে Current Directory/Downloads ব্যবহার করুন
+                                                                           
         self.download_dir = self.home / "Downloads"
         
-        # Downloads ডিরেক্টরি তৈরি করার চেষ্টা করুন
+                                                   
         try:
             self.download_dir.mkdir(exist_ok=True)
             print(f"✓ Download directory created: {self.download_dir}")
         except Exception as e:
             print(f"⚠️ Warning: Could not create Downloads directory: {e}")
-            # যদি তৈরি করতে না পারে, current directory ব্যবহার করুন
+                                                                   
             self.download_dir = self.home
             print(f"✓ Using current directory: {self.download_dir}")
         
-        # কনফিগ ফাইলগুলো current directory তে রাখুন
+                                                   
         self.config_file = self.home / ".dualdl_config.json"
         self.history_file = self.home / ".dualdl_history.json"
         
-        # Web server config
+                           
         self.web_port = 8080
         self.web_enabled = True
         
         self.load_config()
         
-        # CLI argument override support (config ফাইলের পরে apply করা হয় যাতে config তা overwrite না করে)
+                                                                                                         
         if len(sys.argv) >= 3 and sys.argv[1] == '--port':
             try:
                 port = int(sys.argv[2])
@@ -88,15 +86,15 @@ class Config:
             try:
                 with open(self.config_file, 'r') as f:
                     loaded_data = json.load(f)
-                    # Merge defaults with loaded data
+                                                     
                     self.data = {**defaults, **loaded_data}
-                    # Update download directory from config if exists
+                                                                     
                     if 'download_dir' in loaded_data:
                         try:
                             self.download_dir = Path(loaded_data['download_dir'])
                             self.download_dir.mkdir(exist_ok=True)
                         except:
-                            pass  # Keep current directory if failed
+                            pass                                    
             except Exception as e:
                 print(f"⚠️ Config load error: {e}")
                 self.data = defaults
@@ -107,7 +105,7 @@ class Config:
         self.web_host = self.data.get('web_host', '0.0.0.0')
     
     def save(self):
-        # Update download_dir in config before saving
+                                                     
         self.data['download_dir'] = str(self.download_dir)
         self.data['web_port'] = self.web_port
         self.data['web_host'] = self.web_host
@@ -119,9 +117,7 @@ class Config:
             print(f"❌ Error saving config: {e}")
             return False
 
-# ---------------------------------------------------------
-# DOWNLOAD ENGINE (Shared Core)
-# ---------------------------------------------------------
+                                                           
 class DownloadEngine:
     def __init__(self, config):
         self.config = config
@@ -129,13 +125,13 @@ class DownloadEngine:
         self.history = self.load_history()
         self.socketio = None
         
-        # User agent for iOS
+                            
         self.user_agent = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15"
         
-        # Thread safety: সব shared state একটা Lock দিয়ে protect করা
+                                                                    
         self._lock = threading.Lock()
         
-        # Cleanup old completed entries every 10 minutes
+                                                        
         self._cleanup_timer = threading.Thread(target=self._periodic_cleanup, daemon=True)
         self._cleanup_timer.start()
     
@@ -184,7 +180,7 @@ class DownloadEngine:
             self.history.append(entry)
         self.save_history()
         
-        # WebSocket update if available
+                                       
         if self.socketio:
             self.socketio.emit('history_update', entry)
     
@@ -192,12 +188,12 @@ class DownloadEngine:
         """Detect if URL is video, image, or file"""
         url_lower = url.lower()
         
-        # Check video sites
+                           
         for site in self.config.data['video_sites']:
             if site in url_lower:
                 return 'video'
         
-        # Check file extensions
+                               
         file_exts = ['.pdf', '.jpg', '.jpeg', '.png', '.gif', '.mp3', 
                     '.mp4', '.avi', '.mkv', '.zip', '.rar', '.7z',
                     '.apk', '.exe', '.dmg', '.deb', '.txt', '.doc', 
@@ -207,16 +203,16 @@ class DownloadEngine:
             if url_lower.endswith(ext):
                 return 'file'
         
-        # সাধারণ domain যেগুলো video support করে (video_sites বাদে)
+                                                                   
         known_video_like_domains = [
             'mediafire.com', 'dropbox.com', 'drive.google.com', 'wetransfer.com',
             'mega.nz', 'archive.org', 'reddit.com', 'imgur.com', 'flickr.com'
         ]
         for domain in known_video_like_domains:
             if domain in url_lower:
-                return 'file'  # ভুল করে yt_dlp তে পাঠাবো না, requests দিয়ে download করবো
+                return 'file'                                                             
         
-        # HEAD request — বড় সাইটগুলো redirect করে, তাই GET একটা ছোট রেঞ্জ দিয়ে test করা বেশি নির্ভরযোগ্য
+                                                                                                          
         try:
             resp = requests.head(url, timeout=5, 
                                headers={'User-Agent': self.user_agent},
@@ -238,7 +234,7 @@ class DownloadEngine:
         except Exception:
             pass
         
-        # HEAD redirect বা error হলে: যদি yt_dlp extract করতে পারে → video
+                                                                          
         try:
             with yt_dlp.YoutubeDL({'quiet': True, 'no_warnings': True, 'extract_flat': True}) as ydl:
                 ydl.extract_info(url, download=False)
@@ -268,7 +264,7 @@ class DownloadEngine:
                     'formats': []
                 }
                 
-                # Format options
+                                
                 for fmt in info.get('formats', []):
                     if fmt.get('vcodec') != 'none':
                         result['formats'].append({
@@ -281,7 +277,7 @@ class DownloadEngine:
                             'acodec': fmt.get('acodec', 'none')
                         })
                 
-                # Filter and sort (আগের flat list — backward compatibility)
+                                                                           
                 result['formats'] = [f for f in result['formats'] if f['resolution'] != 'unknown']
                 result['formats'].sort(key=lambda f: f['height'], reverse=True)
                 
@@ -306,8 +302,8 @@ class DownloadEngine:
                 uploader = info.get('uploader', 'Unknown')
                 
                 video_formats, audio_formats = [], []
-                seen_video = set()   # (resolution, ext) dedupe key
-                seen_audio = set()   # (abr, ext) dedupe key
+                seen_video = set()                                 
+                seen_audio = set()                          
                 
                 for fmt in info.get('formats', []):
                     if fmt.get('vcodec') != 'none':
@@ -339,7 +335,7 @@ class DownloadEngine:
                             'filesize': fmt.get('filesize', 0) or 0,
                         })
                 
-                # ভিডিও: height দিযে descending; অডিও: bitrate দিযে descending
+                                                                              
                 video_formats.sort(key=lambda f: f['height'], reverse=True)
                 audio_formats.sort(key=lambda f: f['abr'], reverse=True)
                 
@@ -359,7 +355,7 @@ class DownloadEngine:
         
         def download_thread():
             try:
-                # Check concurrent download limit
+                                                 
                 with self._lock:
                     active_count = sum(
                         1 for v in self.active_downloads.values()
@@ -372,7 +368,7 @@ class DownloadEngine:
                         "Wait for an active download to finish."
                     )
                 
-                # Update status
+                               
                 with self._lock:
                     self.active_downloads[download_id] = {
                         'status': 'downloading',
@@ -387,13 +383,12 @@ class DownloadEngine:
                 if self.socketio:
                     self.socketio.emit('download_update', status_snapshot)
                 
-                # Determine format
-                # yt_dlp তে 'mp4' বা 'webm' কোনো format_id নয় — সেগুলো বরং format QUERY
+                                  
                 format_query_map = {
                     'mp4': 'bv*[ext=mp4][height<=?1080]+ba/b[ext=mp4]/bv*+ba/b',
                     'webm': 'bv*[ext=webm]+ba/b[ext=webm]/bv*+ba/b',
                     'worst': 'worst',
-                    # Quality presets — shortcut CLI (720p, 480p ইত্যাদি)
+                                                                         
                     '720p': 'bv*[height<=720][ext=mp4]+ba/b[ext=mp4]/bv*[height<=720]+ba/b[height<=720]/best[height<=720]',
                     '1080p': 'bv*[height<=1080][ext=mp4]+ba/b[ext=mp4]/bv*[height<=1080]+ba/b[height<=1080]/best[height<=1080]',
                     '480p': 'bv*[height<=480][ext=mp4]+ba/b[ext=mp4]/bv*[height<=480]+ba/b[height<=480]/best[height<=480]',
@@ -405,10 +400,10 @@ class DownloadEngine:
                 elif format_id == 'best':
                     dl_format = 'best'
                 else:
-                    # actual format_id (e.g., 137, 248) — audio merge করে download
+                                                                                  
                     dl_format = f"{format_id}+bestaudio/best"
                 
-                # Audio-only download support (download_video এ 'audio' দিলে সেই branch)
+                                                                                        
                 if format_id == 'audio':
                     dl_format = 'bestaudio/best'
                     filename_template = f"%(title)s_{download_id}_audio.%(ext)s"
@@ -424,17 +419,17 @@ class DownloadEngine:
                     'retries': 3,
                 }
                 
-                # Start download
+                                
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                     ydl.download([url])
                 
-                # Find downloaded file
+                                      
                 downloaded_files = list(self.config.download_dir.glob(f"*{download_id}*"))
                 if downloaded_files:
                     filename = downloaded_files[0].name
                     filesize = downloaded_files[0].stat().st_size
                     
-                    # Update status
+                                   
                     with self._lock:
                         self.active_downloads[download_id].update({
                             'status': 'completed',
@@ -448,8 +443,8 @@ class DownloadEngine:
                         filesize, "video"
                     )
                 else:
-                    # File না পেলে guess করবো না — failed মার্ক করবো
-                    # (আগে ডিরেক্টরির সবচেয়ে নতুন যেকোনো ফাইলকে success ধরা হতো, যা ভুল)
+                                                                    
+                                                                                         
                     raise Exception("Downloaded file not found in output directory")
                 
             except Exception as e:
@@ -461,13 +456,13 @@ class DownloadEngine:
                     }
                 self.add_history(url, "", False, 0, "video")
             
-            # Final update
+                          
             if self.socketio:
                 with self._lock:
                     status_snapshot = dict(self.active_downloads[download_id])
                 self.socketio.emit('download_update', status_snapshot)
         
-        # Start in thread
+                         
         thread = threading.Thread(target=download_thread, daemon=True)
         thread.start()
         
@@ -506,7 +501,7 @@ class DownloadEngine:
         
         def download_thread():
             try:
-                # Limit check — network request এর আগেই করা (বাজে data খরচ এড়াতে)
+                                                                                  
                 with self._lock:
                     active_count = sum(
                         1 for v in self.active_downloads.values()
@@ -527,13 +522,13 @@ class DownloadEngine:
                 response = session.get(url, stream=True, headers=headers, timeout=30)
                 response.raise_for_status()
                 
-                # Get filename (content-disposition এ encode থাকলে decode করা)
+                                                                              
                 filename = None
                 if 'content-disposition' in response.headers:
                     cd = response.headers['content-disposition']
                     if 'filename=' in cd:
                         filename = cd.split('filename=')[1].split(';')[0].strip('"').strip("'")
-                # filename*=UTF-8''... ফরম্যাট fallback
+                                                       
                 if not filename and 'filename*' in response.headers.get('content-disposition', ''):
                     cd = response.headers['content-disposition']
                     match = re.search(r"filename\*=UTF-8''(.+?)(?:;|$)", cd)
@@ -545,12 +540,12 @@ class DownloadEngine:
                     filename = os.path.basename(parsed.path)
                     filename = unquote(filename)
                 
-                # Clean filename
+                                
                 filename = re.sub(r'[^\w\-_\. ]', '', filename)
                 if not filename or len(filename) < 3:
                     filename = f"download_{download_id}.bin"
                 
-                # Full path
+                           
                 filepath = self.config.download_dir / filename
                 
                 total_size = int(response.headers.get('content-length', 0))
@@ -567,7 +562,7 @@ class DownloadEngine:
                 if self.socketio:
                     self.socketio.emit('download_update', self.active_downloads[download_id])
                 
-                # Download with progress
+                                        
                 with open(filepath, 'wb') as f:
                     for chunk in response.iter_content(chunk_size=8192):
                         if chunk:
@@ -587,7 +582,7 @@ class DownloadEngine:
                                         'total': total_size
                                     })
                 
-                # Complete
+                          
                 with self._lock:
                     self.active_downloads[download_id].update({
                         'status': 'completed',
@@ -609,7 +604,7 @@ class DownloadEngine:
                     }
                 self.add_history(url, "", False, 0, "file")
             
-            # Final update
+                          
             if self.socketio:
                 with self._lock:
                     status_snapshot = dict(self.active_downloads[download_id])
@@ -620,9 +615,7 @@ class DownloadEngine:
         
         return download_id
 
-# ---------------------------------------------------------
-# WEB INTERFACE (Flask)
-# ---------------------------------------------------------
+                                                           
 class WebInterface:
     def __init__(self, engine, config):
         self.engine = engine
@@ -694,7 +687,7 @@ class WebInterface:
         
         @self.app.route('/api/history')
         def api_history():
-            return jsonify(self.engine.history[-20:])  # Last 20
+            return jsonify(self.engine.history[-20:])           
         
         @self.app.route('/api/files')
         def api_files():
@@ -714,15 +707,15 @@ class WebInterface:
         
         @self.app.route('/api/open/<filename>')
         def api_open(filename):
-            # Path traversal ঠেকানো: '..' বা '/' থাকলে সরাসরি reject
+                                                                    
             if '..' in filename or '/' in filename or '\\' in filename:
                 return jsonify({'error': 'Invalid filename'}), 400
             filepath = (self.config.download_dir / filename).resolve()
-            # resolve() এর পরও download_dir এর ভেতরে আছে কি না confirm করা
+                                                                          
             if not str(filepath).startswith(str(self.config.download_dir.resolve())):
                 return jsonify({'error': 'Invalid filename'}), 400
             if filepath.exists():
-                # In a-Shell, we can't directly open, but we can return content
+                                                                               
                 if filename.endswith(('.txt', '.json', '.py', '.html', '.css', '.js')):
                     with open(filepath, 'r') as f:
                         return f.read()[:5000]
@@ -1265,7 +1258,7 @@ class WebInterface:
     def start(self):
         """Start the web server"""
         print(f"\n🌐 Starting Web Server on: http://{self.config.web_host}:{self.config.web_port}")
-        # LAN IP বের করা যাতে অন্য ডিভাইস থেকে সহজে access করা যায়
+                                                                   
         try:
             import socket as _s
             _sock = _s.socket(_s.AF_INET, _s.SOCK_DGRAM)
@@ -1277,7 +1270,7 @@ class WebInterface:
             print(f"📱 Open on other devices: http://YOUR_IP:{self.config.web_port}")
         print("🔄 Press Ctrl+C to stop web server\n")
         
-        # Try to open browser
+                             
         if self.config.data.get('auto_open_browser', True):
             try:
                 webbrowser.open(f"http://{self.config.web_host}:{self.config.web_port}")
@@ -1297,9 +1290,7 @@ class WebInterface:
             print(f"❌ Web server error: {e}")
             print("⚠️ Try using a different port: python3 duel-downloader.py --port 8081")
 
-# ---------------------------------------------------------
-# TERMINAL INTERFACE
-# ---------------------------------------------------------
+                                                           
 class TerminalInterface:
     def __init__(self, engine, config):
         self.engine = engine
@@ -1335,7 +1326,7 @@ class TerminalInterface:
         videos = info.get('videos', [])
         audios = info.get('audios', [])
         
-        # ভিডিও লিস্ট
+                     
         if videos:
             print(f"\n\033[36m📹 Video qualities (number টা type করবেন quality বেছে নিতে):\033[0m")
             print("\033[90m" + "-" * 58 + "\033[0m")
@@ -1345,7 +1336,7 @@ class TerminalInterface:
         else:
             print("\n\033[90m📹 কোনো ভিডিও format পাওয়া যায়নি\033[0m")
         
-        # অডিও লিস্ট
+                    
         if audios:
             print(f"\n\033[36m🎧 Audio qualities:\033[0m")
             print("\033[90m" + "-" * 58 + "\033[0m")
@@ -1361,7 +1352,7 @@ class TerminalInterface:
         
         url_type = self.engine.detect_type(url)
         if url_type != 'video':
-            # ভিডিও সাইট না হলে সরাসরি file download
+                                                    
             did = self.engine.download_file(url)
             print(f"\033[32m✅ Download started (file)! ID: {did}\033[0m")
             return
@@ -1375,7 +1366,7 @@ class TerminalInterface:
         self.print_format_lists(info)
         
         if mode == 'audio':
-            # অডিও-লিস্ট দেখিয়ে best অডিও download
+                                                   
             print("\n\033[36m🎧 Audio download mode — best audio (video ছাড়া) download হচ্ছে\033[0m")
             did = self.engine.download_video(url, 'audio')
         else:
@@ -1389,7 +1380,7 @@ class TerminalInterface:
         print("\033[90mCheck Web UI for progress or wait...\033[0m")
     
     def print_header(self):
-        # cross-platform clear screen (a-Shell, Windows, macOS সবাই support করে)
+                                                                                
         try:
             print('\033c', end='')
         except Exception:
@@ -1485,7 +1476,7 @@ class TerminalInterface:
         print("\033[90mWeb interface will open in browser\033[0m")
         print()
         
-        # Start web server in background thread
+                                               
         web_interface = WebInterface(self.engine, self.config)
         
         def run_server():
@@ -1616,7 +1607,7 @@ class TerminalInterface:
         total = len(self.engine.history)
         successful = sum(1 for h in self.engine.history if h['success'])
         failed = total - successful
-        total_size = sum(h.get('size', 0) for h in self.engine.history) / (1024*1024*1024)  # GB
+        total_size = sum(h.get('size', 0) for h in self.engine.history) / (1024*1024*1024)      
         
         print(f"\033[33m📥 Total Downloads: {total}\033[0m")
         print(f"\033[32m✅ Successful: {successful}\033[0m")
@@ -1627,7 +1618,7 @@ class TerminalInterface:
             success_rate = (successful / total) * 100
             print(f"\033[36m📈 Success Rate: {success_rate:.1f}%\033[0m")
             
-            # Last download
+                           
             if self.engine.history:
                 last = self.engine.history[-1]
                 last_time = datetime.fromisoformat(last['timestamp']).strftime('%Y-%m-%d %H:%M')
@@ -1637,9 +1628,7 @@ class TerminalInterface:
         print()
         input("\033[90mPress Enter to continue...\033[0m")
 
-# ---------------------------------------------------------
-# MAIN APPLICATION
-# ---------------------------------------------------------
+                                                           
 def main():
     """Main application entry point"""
     
@@ -1649,7 +1638,7 @@ def main():
     print("   Compatible with a-Shell on iOS")
     print("═" * 60 + "\033[0m")
     
-    # Check dependencies
+                        
     missing = []
     try:
         import flask
@@ -1682,7 +1671,7 @@ def main():
     else:
         print("✓ All dependencies found")
     
-    # Initialize
+                
     print("\n🔧 Initializing...")
     config = Config()
     print(f"✓ Download directory: {config.download_dir}")
@@ -1690,15 +1679,9 @@ def main():
     engine = DownloadEngine(config)
     print(f"✓ Loaded {len(engine.history)} history entries")
     
-    # ---------------------------------------------------------
-    # QUICK SHORTCUT SYSTEM — URL অর্গুমেন্ট দিলে direct action
-    #   duel-downloader.py <URL>              → ভিডিও লিস্ট + best download
-    #   duel-downloader.py <URL> 720p         → সরাসরি 720p download (360p/480p/720p/1080p)
-    #   duel-downloader.py <URL> audio        → অডিও লিস্ট + audio-only download
-    #   duel-downloader.py --help             → হেল্প
-    # ---------------------------------------------------------
+                                                               
     args = sys.argv[1:]
-    # flag options আগে খসে ফেলি (--port, --terminal-only)
+                                                         
     flags = [a for a in args if a.startswith('--')]
     pos = [a for a in args if not a.startswith('--')]
     
@@ -1733,12 +1716,12 @@ def main():
         time.sleep(1.5)
         terminal.quick_download(url, shortcut_mode)
         
-        # Download finish হওয়া অপেক্ষা করবে (status update 2s পরপর চেক)
+                                                                        
         did = None
         last_status = None
         for i in range(2):
-            time.sleep(1)  # দিরেক্ট thread শুরু হতে দিই
-        max_wait = 600  # 10 মিনিট
+            time.sleep(1)                               
+        max_wait = 600            
         for _ in range(max_wait // 2):
             time.sleep(2)
             with engine._lock:
@@ -1754,7 +1737,7 @@ def main():
                 last_status = cur
             if cur in ('completed', 'failed'):
                 v = vals[-1] if vals else {}
-                print()  # status line break
+                print()                     
                 if cur == 'completed':
                     print(f"\n\033[32m🎉 Download completed: {v.get('filename')} ({TerminalInterface._size(v.get('filesize', 0))})\033[0m")
                 else:
@@ -1777,29 +1760,29 @@ def main():
         mode = '3'
     
     if mode == '1':
-        # Terminal only
+                       
         print("\n📟 Starting Terminal Interface...")
         terminal = TerminalInterface(engine, config)
         terminal.main_menu()
     
     elif mode == '2':
-        # Web only
+                  
         print("\n🌐 Starting Web Interface...")
         web_interface = WebInterface(engine, config)
         web_interface.start()
     
     elif mode == '3':
-        # Both (Terminal + Web)
+                               
         print("\n🚀 Starting both Terminal and Web interface...")
         
-        # Start web server in background
+                                        
         web_interface = WebInterface(engine, config)
         web_thread = threading.Thread(target=web_interface.start, daemon=True)
         web_thread.start()
         
-        time.sleep(2)  # Give web server time to start
+        time.sleep(2)                                 
         
-        # Start terminal interface
+                                  
         terminal = TerminalInterface(engine, config)
         terminal.main_menu()
     
@@ -1807,9 +1790,6 @@ def main():
         print("\033[31m❌ Invalid selection\033[0m")
 
 
-# ---------------------------------------------------------
-# RUN
-# ---------------------------------------------------------
 if __name__ == "__main__":
     try:
         main()
